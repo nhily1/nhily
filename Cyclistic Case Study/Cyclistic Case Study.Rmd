@@ -1,0 +1,270 @@
+---
+title: "Cyclistic Bike Data"
+author: "Nhi Ly"
+date: "7/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Packages and Import Data
+
+This is an R Markdown document of the Cyclistic Case Study. First, we will load the necessary packages.
+
+```{r load packages, warning=FALSE}
+library(readr) # read in csv files
+library(tidyverse) # wrangle data
+library(lubridate) # date functions
+library(ggplot2) # visualizations
+library(scales) # visualization, change x and y axis scales
+```
+
+Next, set up our working directory and import all the data sets.
+
+```{r import data}
+getwd() # get current working directory
+setwd("C:/Users/Whitney/Desktop/Raw Data - Cyclistic Bike") # set working directory
+
+# import data
+june2020 <- read.csv("202006-tripdata.csv")
+july2020 <- read.csv("202007-tripdata.csv")
+august2020 <- read.csv("202008-tripdata.csv")
+september2020 <- read.csv("202009-tripdata.csv")
+october2020 <- read.csv("202010-tripdata.csv")
+november2020 <- read.csv("202011-tripdata.csv")
+december2020 <- read.csv("202012-tripdata.csv")
+january2021 <- read.csv("202101-tripdata.csv")
+february2021 <- read.csv("202102-tripdata.csv")
+march2021 <- read.csv("202103-tripdata.csv")
+april2021 <- read.csv("202104-tripdata.csv")
+may2021 <- read.csv("202105-tripdata.csv")
+```
+
+### Clean and Process Data
+
+We want to combine all the data sets into one large data set, but we first have to check to see if the data types of each columns match.
+
+```{r}
+# str(june2020)
+# str(july2020)
+# str(august2020)
+# str(september2020)
+# str(october2020)
+# str(november2020)
+# str(december2020)
+# str(january2021)
+# str(february2021)
+# str(march2021)
+# str(april2021)
+# str(may2021)
+```
+
+Checking the data types of each datasets shows that **start_station_id** and **end_station_id** changes from an integer to a character type on December 2020. Since we want to keep any character values in December and onward, we will change the **start_station_id** and **end_station_id** columns in June 2020-November2020 from an integer to a character type.
+
+```{r change data types and combine datasets}
+june2020 <- mutate(june2020, start_station_id = as.character(start_station_id),
+                   end_station_id = as.character(end_station_id))
+
+july2020 <- mutate(july2020, start_station_id = as.character(start_station_id),
+                   end_station_id = as.character(end_station_id))
+
+august2020 <- mutate(august2020, start_station_id = as.character(start_station_id),
+                   end_station_id = as.character(end_station_id))
+
+september2020 <- mutate(september2020, start_station_id = as.character(start_station_id),
+                   end_station_id = as.character(end_station_id))
+
+october2020 <- mutate(october2020, start_station_id = as.character(start_station_id),
+                   end_station_id = as.character(end_station_id))
+
+november2020 <- mutate(november2020, start_station_id = as.character(start_station_id),
+                   end_station_id = as.character(end_station_id))
+
+# combine datasets
+bike_data <- bind_rows(june2020, july2020, august2020, september2020, october2020, november2020, december2020,
+                       january2021, february2021, march2021, april2021, may2021)
+
+```
+
+Drop columns that are not needed for analysis.
+
+```{r drop start_lat, start_lng, end_lat, end_lng}
+bike_data <- bike_data %>%
+              select(-c("start_lat", "start_lng", "end_lat", "end_lng"))
+```
+
+The column **member_casual** should only have 2 distinct values (member and casual), so let's check to see if this is true.
+
+```{r}
+unique(bike_data$member_casual)
+```
+
+Extract day, month, year, and day of the week from **started_at** column and place them into new columns.
+
+```{r date}
+bike_data$date <- as.Date(bike_data$started_at) # get date from started_at column
+
+bike_data$month <- format(as.Date(bike_data$date), "%m") # get month
+bike_data$day <- format(as.Date(bike_data$date), "%d") # get day
+bike_data$year <- format(as.Date(bike_data$date), "%Y") # get year
+bike_data$day_of_week <- format(as.Date(bike_data$date), "%A") # get day of the week
+```
+
+Calculate bike ride length and place it in a new column called **ride_length**. Values in this new columns are in seconds.
+
+```{r trip duration}
+bike_data$ride_length <- difftime(bike_data$ended_at, bike_data$started_at) # calculate trip duration
+```
+
+We need **ride_length** to be a numeric type for our analysis, so check to see if it is a numeric type. If not, change it to be.
+```{r change ride_length data type to numeric}
+is.numeric(bike_data$ride_length) # check to see if ride_length is numeric
+bike_data$ride_length <- as.numeric(as.character(bike_data$ride_length)) # change it to numeric type
+is.numeric(bike_data$ride_length)
+```
+
+We will remove any observations where the bikes were taken from HQ for a quality check and any observations with a negative **ride_length**. Put this in a new data frame.
+
+```{r remove unnecessary observations}
+bike_data_v2 <- bike_data[!(bike_data$start_station_name == "HQ QR" | bike_data$ride_length < 0) ,]
+```
+
+
+
+### Analysis
+
+Get a summary of **ride_length**.
+```{r mean, median, max, and min of ride_length}
+summary(bike_data_v2$ride_length)
+```
+
+
+Determine if there is a difference between trip duration of members and casual riders.
+
+```{r aggregate}
+aggregate(bike_data_v2$ride_length ~ bike_data_v2$member_casual, FUN = mean)
+aggregate(bike_data_v2$ride_length ~ bike_data_v2$member_casual, FUN = median)
+aggregate(bike_data_v2$ride_length ~ bike_data_v2$member_casual, FUN = max)
+aggregate(bike_data_v2$ride_length ~ bike_data_v2$member_casual, FUN = min)
+```
+
+Now, see if there is a difference between users on each day of the week.
+
+```{r}
+aggregate(bike_data_v2$ride_length ~ bike_data_v2$member_casual + bike_data_v2$day_of_week, FUN = mean)
+
+# order weekdays starting on Sunday
+bike_data_v2$day_of_week <- ordered(bike_data_v2$day_of_week, 
+                                    levels = c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", 
+                                             "Friday", "Saturday"))
+```
+
+The days are out of order, so let's reorder days of the week to start on Sunday.
+
+```{r find number of rides and average ride length by user type}
+bike_data_v2 %>%
+  mutate(weekday = wday(started_at, label = TRUE)) %>% # use wday() function to get day of the week
+  group_by(member_casual, weekday) %>%
+  summarize(num_of_rides = n(), average_duration = mean(ride_length)) %>%  # calculates number of rides and average ride length
+  arrange(member_casual, weekday) # sort by users and day of the week
+```
+
+
+
+### Visuals
+Create a bar graph of number of rides by user type on each day of the week.
+
+```{r number of rides by each day of the week}
+bike_data_v2 %>%
+  mutate(weekday = wday(started_at, label = TRUE)) %>%
+  group_by(member_casual, weekday) %>%
+  summarize(num_of_rides = n(), average_duration = mean(ride_length)) %>%
+  arrange(member_casual, weekday) %>%
+  ggplot(aes(x = weekday, y = num_of_rides, fill = member_casual)) + geom_col(position = "dodge") + 
+  labs(title = "Number of Rides by User Type Each Day of the Week", x = "Day of the Week", y = "Number of Rides") + 
+  scale_fill_discrete(name = "User Type") + # rename legend title
+  scale_y_continuous(labels = comma) # change y-axis values from scientific notation to full numbers
+```
+
+Create a bar plot of average bike ride duration by user type on each day of the week.
+
+```{r average duration by each day of week}
+bike_data_v2 %>%
+  mutate(weekday = wday(started_at, label = TRUE)) %>%
+  group_by(member_casual, weekday) %>%
+  summarize(num_of_rides = n(), average_duration = mean(ride_length)) %>%
+  arrange(member_casual, weekday) %>%
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) + geom_col(position = "dodge") + 
+  labs(title = "Average Duration of Bike Rides by User Type Each Day of the Week", 
+       x = "Day of the Week", 
+       y = "Bike   Ride Duration (seconds)") + 
+  scale_fill_discrete(name = "User Type") # rename legend title
+```
+
+
+
+### Create a csv file of the analysis
+
+Create a data frame of the analysis summary.
+
+```{r create a dataframe of analysis named counts}
+counts <- aggregate(bike_data_v2$ride_length ~ bike_data_v2$member_casual + bike_data_v2$day_of_week, FUN = mean)
+
+# save it as a csv file
+write.csv(counts, file = "C:/Users/Whitney/Desktop/avg_ride_length.csv", row.names = FALSE)
+```
+
+
+
+
+### Additional Analysis
+
+```{r find out how many members and casual riders there are each month}
+bike_data$month <- format(as.Date(bike_data$date), "%b") # abbreviated month format
+
+# update bike_data_v2
+bike_data_v2 <- bike_data[!(bike_data$start_station_name == "HQ QR" | bike_data$ride_length < 0) ,]
+
+# order months to start on Jun
+bike_data_v2$month <- ordered(bike_data_v2$month, levels = c("Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May"))
+
+# summary
+bike_data_v2 %>%
+  group_by(member_casual, month) %>%
+  summarize(num_of_rides = n()) %>%  
+  arrange(member_casual, month) # sort by users and month
+
+# line graph
+bike_data_v2 %>%
+  group_by(member_casual, month) %>%
+  summarize(num_of_rides = n()) %>%
+  arrange(member_casual, month) %>%
+  ggplot(aes(x = month, y = num_of_rides, group = member_casual, colour = member_casual)) + 
+  geom_line(size = 0.8) + # line width
+  labs(title = "Amount of Cyclistic Members and Casual Riders", 
+       subtitle = "June 2020 to May 2021", 
+       x = "Month", 
+       y = "Number of Rides") + 
+  scale_color_manual(name = "User Type", # rename legend title
+                     values = c("casual" = "seagreen", "member" = "purple")) + # add colors to lines
+  scale_y_continuous(labels = comma) # change y-axis values from scientific notation to full numbers
+
+# create data frame of number of users by month
+monthly_users <- bike_data_v2 %>%
+                  group_by(member_casual, month) %>%
+                  summarize(num_of_rides = n()) %>%  
+                  arrange(month, member_casual) # sort by month first, then users
+
+# save it as a csv file
+write.csv(monthly_users, file = "C:/Users/Whitney/Desktop/monthly_users.csv", row.names = FALSE)
+```
+
+
+
+
+
+
+
+
